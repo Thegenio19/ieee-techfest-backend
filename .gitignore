@@ -1,0 +1,16 @@
+# Dependencies
+node_modules/
+
+# Environment variables — NEVER commit these
+.env
+
+# SQLite database file — contains real data
+data/
+
+# Logs
+*.log
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db
