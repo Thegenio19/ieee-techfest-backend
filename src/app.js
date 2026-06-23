@@ -17,6 +17,7 @@ const logger = require('./utils/logger');
 const { requestIdMiddleware } = require('./middleware/requestId');
 const { errorHandler } = require('./middleware/errorHandler');
 const healthRouter = require('./routes/health');
+const authRouter = require('./routes/auth');
 
 const app = express();
 
@@ -83,9 +84,9 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 app.use('/health', healthRouter);
+app.use('/auth', authRouter);
 
 // TODO: mount remaining routes in later sessions
-// app.use('/api/auth', authRouter);
 // app.use('/api/registrations', registrationRouter);
 // app.use('/api/tickets', ticketsRouter);
 // app.use('/api/checkin', checkinRouter);
