@@ -17,10 +17,17 @@ const logger = require('./utils/logger');
 const { requestIdMiddleware } = require('./middleware/requestId');
 const { errorHandler } = require('./middleware/errorHandler');
 const { studentLimiter } = require('./middleware/rateLimiter'); // Session 3: rate limiting
+
+// Route Imports
 const healthRouter = require('./routes/health');
 const authRouter = require('./routes/auth');
-const registrationRouter = require('./routes/registrations'); // Session 3
-const volunteerRouter = require('./routes/volunteer');         // Session 3
+const registrationRouter = require('./routes/registrations');   // Session 3
+const volunteerRouter = require('./routes/volunteer');          // Session 3
+
+// Session 4 Route Imports
+const paymentRouter = require('./routes/payments');
+const ticketRouter = require('./routes/tickets');
+const checkinRouter = require('./routes/checkin');
 
 const app = express();
 
@@ -31,6 +38,14 @@ app.use(helmet());
 
 // Allow cross-origin requests (needed if you add a frontend later, or for Postman)
 app.use(cors());
+
+
+// ─── CRITICAL WEBHOOK MOUNT ───────────────────────────────────────────────────
+// We MUST mount the payment router here, BEFORE express.json() is called.
+// This allows the POST /payment/webhook route to use express.raw() and grab 
+// the unmodified buffer/string needed for Razorpay's HMAC signature verification.
+app.use('/payment', paymentRouter);
+
 
 // ─── Request parsing ─────────────────────────────────────────────────────────
 app.use(express.json({
@@ -98,12 +113,11 @@ app.use('/health', healthRouter);
 app.use('/auth', studentLimiter, authRouter);
 
 app.use('/registrations', registrationRouter); // Session 3: registration flow
-app.use('/volunteer', volunteerRouter);         // Session 3: volunteer dashboard
+app.use('/volunteer', volunteerRouter);        // Session 3: volunteer dashboard
 
-// TODO: mount remaining routes in later sessions
-// app.use('/api/tickets', ticketsRouter);
-// app.use('/api/checkin', checkinRouter);
-// app.use('/api/payments', paymentsRouter);
+// Session 4 Routes
+app.use('/ticket', ticketRouter);              // Note: /api/ prefix dropped to match earlier setup
+app.use('/checkin', checkinRouter);
 
 // ─── 404 handler ─────────────────────────────────────────────────────────────
 // Must come AFTER all routes. Catches any request that didn't match a route.
