@@ -16,8 +16,11 @@ const swaggerJsdoc = require('swagger-jsdoc');
 const logger = require('./utils/logger');
 const { requestIdMiddleware } = require('./middleware/requestId');
 const { errorHandler } = require('./middleware/errorHandler');
+const { studentLimiter } = require('./middleware/rateLimiter'); // Session 3: rate limiting
 const healthRouter = require('./routes/health');
 const authRouter = require('./routes/auth');
+const registrationRouter = require('./routes/registrations'); // Session 3
+const volunteerRouter = require('./routes/volunteer');         // Session 3
 
 const app = express();
 
@@ -84,14 +87,23 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 app.use('/health', healthRouter);
-app.use('/auth', authRouter);
+
+// Apply studentLimiter to all /auth routes.
+// Why here and not inside the auth router?
+//   Putting it here means it applies to ALL /auth endpoints in one line.
+//   Inside the router you'd have to add it to each handler individually.
+//   The login endpoint in particular needs rate limiting — brute force protection.
+// ⚠️ Note: this means /auth/me and /auth/logout are also rate-limited.
+//   That's acceptable — 10 req/min is plenty for those too.
+app.use('/auth', studentLimiter, authRouter);
+
+app.use('/registrations', registrationRouter); // Session 3: registration flow
+app.use('/volunteer', volunteerRouter);         // Session 3: volunteer dashboard
 
 // TODO: mount remaining routes in later sessions
-// app.use('/api/registrations', registrationRouter);
 // app.use('/api/tickets', ticketsRouter);
 // app.use('/api/checkin', checkinRouter);
 // app.use('/api/payments', paymentsRouter);
-// app.use('/api/volunteer', volunteerRouter);
 
 // ─── 404 handler ─────────────────────────────────────────────────────────────
 // Must come AFTER all routes. Catches any request that didn't match a route.
