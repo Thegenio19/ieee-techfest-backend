@@ -1,10 +1,9 @@
 'use strict';
 
-// Load env vars FIRST — before any other import that might read process.env
+// Load env vars FIRST
 require('dotenv').config();
 
-// This patches Express's router to catch async errors and forward them to error middleware.
-// Without this, an `async` route that throws would silently hang the request.
+// Patch Express's router for async errors
 require('express-async-errors');
 
 const express = require('express');
@@ -12,17 +11,21 @@ const helmet = require('helmet');
 const cors = require('cors');
 const pinoHttp = require('pino-http');
 const swaggerUi = require('swagger-ui-express');
-const swaggerJsdoc = require('swagger-jsdoc');
+
+// Import the newly decoupled Swagger config
+const swaggerSpec = require('./config/swagger');
+
 const logger = require('./utils/logger');
 const { requestIdMiddleware } = require('./middleware/requestId');
 const { errorHandler } = require('./middleware/errorHandler');
-const { studentLimiter } = require('./middleware/rateLimiter'); // Session 3: rate limiting
+const { studentLimiter } = require('./middleware/rateLimiter'); 
 
 // Route Imports
 const healthRouter = require('./routes/health');
 const authRouter = require('./routes/auth');
-const registrationRouter = require('./routes/registrations');   // Session 3
-const volunteerRouter = require('./routes/volunteer');          // Session 3
+const registrationRouter = require('./routes/registrations');   
+const volunteerRouter = require('./routes/volunteer');          
+const adminRouter = require('./routes/admin'); // Added Admin router     
 
 // Session 4 Route Imports
 const paymentRouter = require('./routes/payments');
@@ -31,96 +34,40 @@ const checkinRouter = require('./routes/checkin');
 
 const app = express();
 
-// ─── Security middleware ──────────────────────────────────────────────────────
-// helmet() sets ~15 security headers in one call:
-// X-Frame-Options, X-Content-Type-Options, Strict-Transport-Security, etc.
 app.use(helmet());
-
-// Allow cross-origin requests (needed if you add a frontend later, or for Postman)
 app.use(cors());
 
-
 // ─── CRITICAL WEBHOOK MOUNT ───────────────────────────────────────────────────
-// We MUST mount the payment router here, BEFORE express.json() is called.
-// This allows the POST /payment/webhook route to use express.raw() and grab 
-// the unmodified buffer/string needed for Razorpay's HMAC signature verification.
 app.use('/payment', paymentRouter);
 
-
 // ─── Request parsing ─────────────────────────────────────────────────────────
-app.use(express.json({
-  limit: '10kb',          // reject huge JSON bodies (prevents memory exhaustion attacks)
-}));
-
-// ─── Request ID middleware ────────────────────────────────────────────────────
-// Assigns a unique trace ID to every request. Appears in logs and response headers.
-// Makes it easy to trace a single request through all log lines.
+app.use(express.json({ limit: '10kb' }));
 app.use(requestIdMiddleware);
 
-// ─── HTTP request logging ─────────────────────────────────────────────────────
-// pino-http logs every request: method, URL, status code, response time.
-// It uses the same logger instance so all logs go to the same output.
 app.use(pinoHttp({
   logger,
-  customProps: (req) => ({
-    traceId: req.traceId, // attach our trace ID to every log line for this request
-  }),
-  // Don't log /health requests — they'd flood logs with noise (k8s/uptime monitors hit it constantly)
-  autoLogging: {
-    ignore: (req) => req.url === '/health',
-  },
+  customProps: (req) => ({ traceId: req.traceId }),
+  autoLogging: { ignore: (req) => req.url === '/health' },
 }));
 
-// ─── Swagger API docs ─────────────────────────────────────────────────────────
-const swaggerOptions = {
-  definition: {
-    openapi: '3.0.0',
-    info: {
-      title: 'IEEE RVCE TechFest API',
-      version: '1.0.0',
-      description: 'Registration backend for IEEE Student Branch RVCE TechFest',
-    },
-    servers: [{ url: `http://localhost:${process.env.PORT || 3000}` }],
-    components: {
-      securitySchemes: {
-        bearerAuth: {
-          type: 'http',
-          scheme: 'bearer',
-          bearerFormat: 'JWT',
-        },
-      },
-    },
-  },
-  // glob pattern: scan all route files for JSDoc @swagger comments
-  apis: ['./src/routes/*.js'],
-};
-
-const swaggerSpec = swaggerJsdoc(swaggerOptions);
-
-// Serve Swagger UI at /api-docs
+// Serve Swagger UI
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
+// Redirect root to api-docs for instant visibility during marking
+app.get('/', (req, res) => {
+  res.redirect('/api-docs');
+});
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 app.use('/health', healthRouter);
-
-// Apply studentLimiter to all /auth routes.
-// Why here and not inside the auth router?
-//   Putting it here means it applies to ALL /auth endpoints in one line.
-//   Inside the router you'd have to add it to each handler individually.
-//   The login endpoint in particular needs rate limiting — brute force protection.
-// ⚠️ Note: this means /auth/me and /auth/logout are also rate-limited.
-//   That's acceptable — 10 req/min is plenty for those too.
 app.use('/auth', studentLimiter, authRouter);
+app.use('/registrations', registrationRouter); 
+app.use('/volunteer', volunteerRouter);        
+app.use('/admin', adminRouter); // Mount Admin Router
 
-app.use('/registrations', registrationRouter); // Session 3: registration flow
-app.use('/volunteer', volunteerRouter);        // Session 3: volunteer dashboard
-
-// Session 4 Routes
-app.use('/ticket', ticketRouter);              // Note: /api/ prefix dropped to match earlier setup
+app.use('/ticket', ticketRouter);              
 app.use('/checkin', checkinRouter);
 
-// ─── 404 handler ─────────────────────────────────────────────────────────────
-// Must come AFTER all routes. Catches any request that didn't match a route.
 app.use((req, res) => {
   res.status(404).json({
     success: false,
@@ -129,9 +76,6 @@ app.use((req, res) => {
   });
 });
 
-// ─── Global error handler ────────────────────────────────────────────────────
-// Must be LAST and must have 4 parameters (err, req, res, next).
-// Express identifies error handlers by their 4-argument signature.
 app.use(errorHandler);
 
 module.exports = app;

@@ -1,0 +1,302 @@
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Verify server, database, and cache health
+      responses:
+        '200':
+          description: Systems operational
+        '503':
+          description: Outage detected
+
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Register a new student account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password, college]
+              properties:
+                name: { type: string, example: 'Arjun Kumar' }
+                email: { type: string, example: 'arjun@rvce.edu.in' }
+                password: { type: string, example: 'securepass123' }
+                college: { type: string, example: 'RVCE' }
+      responses:
+        '201':
+          description: Student registered successfully
+        '400':
+          description: Missing fields or invalid formats
+        '409':
+          description: Email already registered
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Log in a user (Student or Volunteer)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, example: 'arjun@rvce.edu.in' }
+                password: { type: string, example: 'securepass123' }
+      responses:
+        '200':
+          description: Login successful, returning JWT tokens
+        '401':
+          description: Invalid credentials
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Exchange a refresh token for a new access token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [userId, refreshToken]
+              properties:
+                userId: { type: string, example: 'user-uuid' }
+                refreshToken: { type: string, example: 'eyJhbGciOi...' }
+      responses:
+        '200':
+          description: Returns a new access token
+        '401':
+          description: Invalid or expired refresh token
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Log out a user by invalidating their refresh token
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Successfully logged out
+
+  /auth/create-volunteer:
+    post:
+      tags: [Auth]
+      summary: Create a volunteer account using an Admin Key
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password, adminKey]
+              properties:
+                name: { type: string, example: 'Test Volunteer' }
+                email: { type: string, example: 'volunteer@rvce.edu.in' }
+                password: { type: string, example: 'volunteer123' }
+                adminKey: { type: string, example: 'ieee2026admin' }
+      responses:
+        '201':
+          description: Volunteer account created
+        '403':
+          description: Invalid Admin Key
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: Retrieve the current logged-in user's profile
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Current user context
+
+  /registrations:
+    post:
+      tags: [Registrations]
+      summary: Register the student for the TechFest
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema:
+            type: string
+            example: 'test-key-001'
+      responses:
+        '201':
+          description: Successfully registered
+        '409':
+          description: Already registered or check-in progress
+
+  /registrations/my:
+    get:
+      tags: [Registrations]
+      summary: View own registration details and payment status
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Registration and payment statuses combined
+        '404':
+          description: Not registered yet
+
+  /payment/create-order:
+    post:
+      tags: [Payments]
+      summary: Initiate a Razorpay payment order
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Order created with Razorpay Key ID
+        '409':
+          description: Already paid
+
+  /payment/webhook:
+    post:
+      tags: [Payments]
+      summary: Webhook for Razorpay payment confirmations
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Successfully processed
+        '400':
+          description: Invalid signature
+
+  /payment/status:
+    get:
+      tags: [Payments]
+      summary: Retrieve current payment status for the logged in student
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Registration and payment statuses
+
+  /ticket:
+    get:
+      tags: [Tickets]
+      summary: Get user's own ticket and QR Code
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Valid ticket with base64 QR payload
+        '404':
+          description: Ticket not found or payment pending
+
+  /ticket/verify/{registrationId}:
+    get:
+      tags: [Tickets]
+      summary: Pre-checkin verification of a ticket
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: registrationId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Verified ticket info
+        '404':
+          description: Ticket not found
+
+  /checkin:
+    post:
+      tags: [Check-in]
+      summary: Verify QR payload and mark student as checked-in
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [qrPayload]
+              properties:
+                qrPayload: { type: string, example: '{"registrationId":"123","sig":"hmac-sig"}' }
+      responses:
+        '200':
+          description: Successfully checked in
+        '400':
+          description: Invalid payload format
+        '401':
+          description: Forged or invalid signature
+        '409':
+          description: Already checked in or lock in progress
+
+  /volunteer/registrations:
+    get:
+      tags: [Volunteer]
+      summary: Get all student registrations (paginated)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Paginated list of registrations
+
+  /volunteer/stats:
+    get:
+      tags: [Volunteer]
+      summary: Get overall fest statistics
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Aggregated statistics for the volunteer dashboard
+
+  /volunteer/checkins:
+    get:
+      tags: [Volunteer]
+      summary: Get a list of all checked-in students
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of students currently at the venue
+
+  /admin/audit/{userId}:
+    get:
+      tags: [Admin]
+      summary: View the chronological event history for a specific user
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+            example: '550e8400-e29b-41d4-a716-446655440000'
+      responses:
+        '200':
+          description: Full event timeline for the user
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden (Not a volunteer)
