@@ -1,0 +1,148 @@
+{
+  "info": {
+    "name": "TechFest Registration API (Dynamic)",
+    "description": "IEEE RVCE TechFest backend — fully dynamic test suite",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000" },
+    { "key": "studentToken", "value": "" },
+    { "key": "volunteerToken", "value": "" },
+    { "key": "registrationId", "value": "" },
+    { "key": "orderId", "value": "" },
+    { "key": "studentEmail", "value": "" },
+    { "key": "volunteerEmail", "value": "" },
+    { "key": "studentId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Folder 1 — Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": { "method": "GET", "url": "{{baseUrl}}/health" }
+        }
+      ]
+    },
+    {
+      "name": "Folder 2 — Auth",
+      "item": [
+        {
+          "name": "Register Student",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": { "exec": [
+                "let uniqueId = Date.now();",
+                "pm.collectionVariables.set('studentEmail', 'student_' + uniqueId + '@rvce.edu.in');",
+                "pm.collectionVariables.set('volunteerEmail', 'vol_' + uniqueId + '@rvce.edu.in');",
+                "pm.collectionVariables.set('uniqueIdempotency', 'key_' + uniqueId);"
+              ]}
+            },
+            {
+              "listen": "test",
+              "script": { "exec": [
+                "pm.test('Status 201', function () { pm.response.to.have.status(201); });",
+                "pm.collectionVariables.set('studentId', pm.response.json().userId);"
+              ]}
+            }
+          ],
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"name\": \"Arjun Kumar\", \"email\": \"{{studentEmail}}\", \"password\": \"securepass123\", \"college\": \"RVCE\"}" }, "url": "{{baseUrl}}/auth/register" }
+        },
+        {
+          "name": "Login Student",
+          "event": [{ "listen": "test", "script": { "exec": ["pm.collectionVariables.set('studentToken', pm.response.json().accessToken);"] } }],
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"email\": \"{{studentEmail}}\", \"password\": \"securepass123\"}" }, "url": "{{baseUrl}}/auth/login" }
+        },
+        {
+          "name": "Create Volunteer",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"name\": \"Test Volunteer\", \"email\": \"{{volunteerEmail}}\", \"password\": \"volunteer123\", \"adminKey\": \"ieee2026admin\"}" }, "url": "{{baseUrl}}/auth/create-volunteer" }
+        },
+        {
+          "name": "Login Volunteer",
+          "event": [{ "listen": "test", "script": { "exec": ["pm.collectionVariables.set('volunteerToken', pm.response.json().accessToken);"] } }],
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "body": { "mode": "raw", "raw": "{\"email\": \"{{volunteerEmail}}\", \"password\": \"volunteer123\"}" }, "url": "{{baseUrl}}/auth/login" }
+        },
+        {
+          "name": "Get Me",
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{studentToken}}" }], "url": "{{baseUrl}}/auth/me" }
+        }
+      ]
+    },
+    {
+      "name": "Folder 3 — Registration",
+      "item": [
+        {
+          "name": "Register TechFest",
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('Status 201', function () { pm.response.to.have.status(201); });", "pm.collectionVariables.set('registrationId', pm.response.json().registrationId);"] } }],
+          "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{studentToken}}" }, { "key": "Idempotency-Key", "value": "{{uniqueIdempotency}}" }], "url": "{{baseUrl}}/registrations" }
+        },
+        {
+          "name": "My Registration",
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{studentToken}}" }], "url": "{{baseUrl}}/registrations/my" }
+        }
+      ]
+    },
+    {
+      "name": "Folder 4 — Payment",
+      "item": [
+        {
+          "name": "Create Order",
+          "event": [{ "listen": "test", "script": { "exec": ["pm.collectionVariables.set('orderId', pm.response.json().orderId);"] } }],
+          "request": { "method": "POST", "header": [{ "key": "Authorization", "value": "Bearer {{studentToken}}" }], "url": "{{baseUrl}}/payment/create-order" }
+        },
+        {
+          "name": "Webhook (Simulated)",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "x-razorpay-signature", "value": "replace-with-hmac" }, { "key": "x-razorpay-event-id", "value": "evt_{{$timestamp}}" }], "body": { "mode": "raw", "raw": "{\"event\": \"payment.captured\", \"payload\": {\"payment\": {\"entity\": { \"id\": \"pay_{{$timestamp}}\", \"order_id\": \"{{orderId}}\" }}}}" }, "url": "{{baseUrl}}/payment/webhook" }
+        },
+        {
+          "name": "Payment Status",
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{studentToken}}" }], "url": "{{baseUrl}}/payment/status" }
+        }
+      ]
+    },
+    {
+      "name": "Folder 5 — Tickets",
+      "item": [
+        {
+          "name": "Get Ticket",
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{studentToken}}" }], "url": "{{baseUrl}}/ticket" }
+        },
+        {
+          "name": "Verify Ticket",
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{volunteerToken}}" }], "url": "{{baseUrl}}/ticket/verify/{{registrationId}}" }
+        }
+      ]
+    },
+    {
+      "name": "Folder 6 — Admin & Volunteer Data",
+      "item": [
+        {
+          "name": "All Registrations",
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{volunteerToken}}" }], "url": "{{baseUrl}}/volunteer/registrations" }
+        },
+        {
+          "name": "Volunteer Stats",
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{volunteerToken}}" }], "url": "{{baseUrl}}/volunteer/stats" }
+        },
+        {
+          "name": "Audit Log",
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{volunteerToken}}" }], "url": "{{baseUrl}}/admin/audit/{{studentId}}" }
+        }
+      ]
+    },
+    {
+      "name": "Folder 7 — Cleanup & Teardown",
+      "item": [
+        {
+          "name": "Logout Student",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{studentToken}}" }], "body": { "mode": "raw", "raw": "{\"refreshToken\": \"placeholder\"}" }, "url": "{{baseUrl}}/auth/logout" }
+        },
+        {
+          "name": "Logout Volunteer",
+          "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{volunteerToken}}" }], "body": { "mode": "raw", "raw": "{\"refreshToken\": \"placeholder\"}" }, "url": "{{baseUrl}}/auth/logout" }
+        }
+      ]
+    }
+  ]
+}
