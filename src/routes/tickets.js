@@ -8,11 +8,23 @@ const db = require('../db/index');
 
 const router = express.Router();
 
+/**
+ * @openapi
+ * /ticket:
+ * get:
+ * tags: [Tickets]
+ * summary: Get user's own ticket and QR Code
+ * security:
+ * - bearerAuth: []
+ * responses:
+ * 200:
+ * description: Valid ticket with base64 QR payload
+ * 404:
+ * description: Ticket not found or payment pending
+ */
 router.get('/', requireAuth, requireRole('student'), async (req, res) => {
   const userId = req.user.id;
 
-  // Note: Following user instructions — ticket validity relies on ticket existence
-  // and registration being paid. No 'status' column exists in tickets table.
   const ticketInfo = db.prepare(`
     SELECT t.*, r.status as registration_status, u.name as student_name
     FROM tickets t
@@ -25,10 +37,7 @@ router.get('/', requireAuth, requireRole('student'), async (req, res) => {
     throw createError(404, 'No valid ticket found. Complete payment first.');
   }
 
-  // Generate QR fresh from deterministic data
   const { qrDataUrl } = await generateQRCode(userId, ticketInfo.registration_id);
-
-  // Compute status for the API response dynamically
   const computedStatus = ticketInfo.checked_in === 1 ? 'checked_in' : 'active';
 
   res.status(200).json({
@@ -41,6 +50,7 @@ router.get('/', requireAuth, requireRole('student'), async (req, res) => {
     checkedInAt: ticketInfo.checked_in_at
   });
 });
+
 
 router.get('/verify/:registrationId', requireAuth, requireRole('volunteer'), (req, res) => {
   const { registrationId } = req.params;
